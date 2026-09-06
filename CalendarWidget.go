@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
 	"image/color"
 	"strconv"
@@ -12,6 +13,9 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
 )
+
+//go:embed image/pig.png
+var logoBytes []byte
 
 const daySideLength = 120
 const dayOfWeekHeight = 40
@@ -182,6 +186,9 @@ func main() {
 	bg := canvas.NewRectangle(colorCalendarBorder)
 	contentWithBorder := container.NewStack(bg, content)
 
+	pigIcon := fyne.NewStaticResource("image/pig.png", logoBytes)
+
+	calendarWindow.SetIcon(pigIcon)
 	calendarWindow.SetContent(contentWithBorder)
 	calendarWindow.ShowAndRun()
 }
