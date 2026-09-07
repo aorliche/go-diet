@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bufio"
 	_ "embed"
 	"fmt"
 	"image/color"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -12,6 +15,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -54,16 +58,49 @@ var colorCalendarGridStrokeNotCurrentMonth = color.Gray{Y: 70}
 var colorCalendarGridStrokeCurrentMonth = color.Gray{Y: 150}
 var colorDayNotCurrentMonth = color.Gray{Y: 150}
 var colorDayCurrentMonth = color.White
-var colorCaloriesNotCurrentMonth = color.NRGBA{R: 255, G: 255, B: 0, A: 150}
-var colorCaloriesCurrentMonth = color.NRGBA{R: 255, G: 255, B: 0, A: 255}
-var colorWeightsNotCurrentMonth = color.NRGBA{R: 255, G: 100, B: 0, A: 150}
-var colorWeightsCurrentMonth = color.NRGBA{R: 255, G: 100, B: 0, A: 255}
+var colorCaloriesNotCurrentMonth = color.Gray{Y: 150} //color.NRGBA{R: 255, G: 255, B: 0, A: 150}
+var colorCaloriesCurrentMonth = color.White //color.NRGBA{R: 255, G: 255, B: 0, A: 255}
+var colorWeightsNotCurrentMonth = color.Gray{Y: 150} //color.NRGBA{R: 255, G: 100, B: 0, A: 150}
+var colorWeightsCurrentMonth = color.White //color.NRGBA{R: 255, G: 100, B: 0, A: 255}
 
 func daysInMonth(year int, month time.Month) int {
 	return time.Date(year, month, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 1, -1).Day()
 }
 
-func createCalendarArea(curMonth int, curYear int, diaryMap map[[3]int]*Day) (fyne.CanvasObject, error) {
+// Custom box for days in calendar
+// Can be clicked to inspect the raw entry for the day
+type ClickableRectangle struct {
+	widget.BaseWidget
+	Rect *canvas.Rectangle
+	OnTap func()
+}
+
+func NewClickableRectangle(color color.Color, onTap func()) *ClickableRectangle {
+	cr := &ClickableRectangle {
+		Rect: canvas.NewRectangle(color),
+		OnTap: onTap,
+	}
+	cr.ExtendBaseWidget(cr)
+	return cr
+}
+
+func (cr *ClickableRectangle) CreateRenderer() fyne.WidgetRenderer {
+	return widget.NewSimpleRenderer(cr.Rect)
+}
+
+func (cr *ClickableRectangle) Tapped(ev *fyne.PointEvent) {
+	if cr.OnTap != nil {
+		cr.OnTap()
+	}
+}
+
+// Rebuild the calendar
+func createCalendarArea(
+	curMonth int, 
+	curYear int, 
+	diaryMap map[[3]int]*Day, 
+	app fyne.App) (fyne.CanvasObject, error) {
+
 	days := make([]fyne.CanvasObject, 7)
 
 	for i := 0; i < 7; i++ {
@@ -147,11 +184,29 @@ func createCalendarArea(curMonth int, curYear int, diaryMap map[[3]int]*Day) (fy
 				count++
 			}
 
-			box := canvas.NewRectangle(colorCalendarBackground)
-			box.SetMinSize(fyne.NewSize(daySideLength, daySideLength))
-			box.StrokeColor = boxStrokeColor 
-			box.StrokeWidth = 2
-			box.CornerRadius = 8
+			box := NewClickableRectangle(colorCalendarBackground, func() {
+				dayObj, ok := diaryMap[[3]int{month, day, year}]
+				if ok {
+					text := dayObj.String()
+					entry :=  widget.NewMultiLineEntry()
+					entry.SetText(text)
+
+					date := "Unknown Date"
+					scanner := bufio.NewScanner(strings.NewReader(text))
+					if scanner.Scan() {
+						date = scanner.Text()
+					}
+					
+					entryWindow := app.NewWindow(date)
+					entryWindow.SetContent(entry)
+					entryWindow.Resize(fyne.NewSize(800, 300))
+					entryWindow.Show()
+				}
+			})
+			box.Rect.SetMinSize(fyne.NewSize(daySideLength, daySideLength))
+			box.Rect.StrokeColor = boxStrokeColor 
+			box.Rect.StrokeWidth = 2
+			box.Rect.CornerRadius = 8
 
 			text := canvas.NewText(strconv.Itoa(day), dayColor)
 			paddedText := container.New(
@@ -198,6 +253,7 @@ func createCalendarArea(curMonth int, curYear int, diaryMap map[[3]int]*Day) (fy
 
 				}
 			} 
+
 			calendar[i*7+j] = container.NewStack(elts...)
 		}
 	}
@@ -233,15 +289,15 @@ func main() {
 		yearStrs[i] = strconv.Itoa(year)
 	}
 
-	calendar, _ := createCalendarArea(curMonth, curYear, diaryMap)
+	calendar, _ := createCalendarArea(curMonth, curYear, diaryMap, dietApp)
 	calendarContainer := container.NewStack(calendar)
 
-	labelMonth := widget.NewLabel("Select Month:")
+	labelMonth := widget.NewLabel("Month:")
 	comboMonth := widget.NewSelect(monthStrs, func(value string) {
 		for i,month := range monthStrs {
 			if month == value {
 				curMonth = i+1
-				calendar, _ := createCalendarArea(curMonth, curYear, diaryMap)
+				calendar, _ := createCalendarArea(curMonth, curYear, diaryMap, dietApp)
 				calendarContainer.Objects[0] = calendar
 				calendarContainer.Refresh()
 				break
@@ -250,13 +306,13 @@ func main() {
 	})
 	comboMonth.SetSelectedIndex(curMonth-1)
 	
-	labelYear := widget.NewLabel("Select Year:")
+	labelYear := widget.NewLabel("Year:")
 	comboYear := widget.NewSelect(yearStrs, func(value string) {
 		for _,year := range yearStrs {
 			if year == value {
 				curYear, _ := strconv.Atoi(year)
 				curYear -= 2000
-				calendar, _ := createCalendarArea(curMonth, curYear, diaryMap)
+				calendar, _ := createCalendarArea(curMonth, curYear, diaryMap, dietApp)
 				calendarContainer.Objects[0] = calendar
 				calendarContainer.Refresh()
 				break
@@ -265,10 +321,58 @@ func main() {
 	})
 	comboYear.SetSelectedIndex(len(yearStrs)-1)
 
+	back := widget.NewButtonWithIcon("Back", theme.Icon(theme.IconNameNavigateBack), func() {
+		if curMonth == 1 {
+			curMonth = 12
+			curYear -= 1
+		} else {
+			curMonth -= 1
+		}
+
+		// Stop it getting confused
+		yearStr := strconv.Itoa(2000+curYear)
+		if !slices.Contains(yearStrs, yearStr) {
+			curMonth = 1
+			curYear += 1
+			return
+		}
+
+		comboMonth.SetSelectedIndex(curMonth-1)
+		comboYear.SetSelected(yearStr)
+
+		calendar, _ := createCalendarArea(curMonth, curYear, diaryMap, dietApp)
+		calendarContainer.Objects[0] = calendar
+		calendarContainer.Refresh()
+	})
+	
+	next := widget.NewButtonWithIcon("Next", theme.Icon(theme.IconNameNavigateNext), func() {
+		if curMonth == 12 {
+			curMonth = 1
+			curYear += 1
+		} else {
+			curMonth += 1
+		}
+
+		// Stop it getting confused
+		yearStr := strconv.Itoa(2000+curYear)
+		if !slices.Contains(yearStrs, yearStr) {
+			curMonth = 12
+			curYear -= 1
+			return
+		}
+
+		comboMonth.SetSelectedIndex(curMonth-1)
+		comboYear.SetSelected(yearStr)
+
+		calendar, _ := createCalendarArea(curMonth, curYear, diaryMap, dietApp)
+		calendarContainer.Objects[0] = calendar
+		calendarContainer.Refresh()
+	})
+
 	pigIcon := fyne.NewStaticResource("image/pig.png", logoBytes)
 	calendarWindow.SetIcon(pigIcon)
 
-	ui := container.NewHBox(labelMonth, comboMonth, labelYear, comboYear)
+	ui := container.NewHBox(back, next, labelMonth, comboMonth, labelYear, comboYear)
 	content := container.NewVBox(ui, calendarContainer)
 
 	calendarWindow.SetContent(content)
