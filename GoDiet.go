@@ -372,7 +372,12 @@ func main() {
 	pigIcon := fyne.NewStaticResource("image/pig.png", logoBytes)
 	calendarWindow.SetIcon(pigIcon)
 
-	ui := container.NewHBox(back, next, labelMonth, comboMonth, labelYear, comboYear)
+	ui := container.New(
+		layout.NewHBoxLayout(),
+		layout.NewSpacer(),
+		back, labelMonth, comboMonth, labelYear, comboYear, next,
+		layout.NewSpacer(),
+	)
 	content := container.NewVBox(ui, calendarContainer)
 
 	calendarWindow.SetContent(content)
