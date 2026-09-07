@@ -14,6 +14,7 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -92,6 +93,21 @@ func (cr *ClickableRectangle) Tapped(ev *fyne.PointEvent) {
 	if cr.OnTap != nil {
 		cr.OnTap()
 	}
+}
+
+// For mouseover events
+func (cr *ClickableRectangle) MouseIn(e *desktop.MouseEvent) {
+	cr.Rect.FillColor = colorWeekdayBackground
+	cr.Rect.Refresh()
+}
+
+func (cr *ClickableRectangle) MouseMoved(e *desktop.MouseEvent) {
+
+}
+
+func (cr *ClickableRectangle) MouseOut() {
+	cr.Rect.FillColor = colorCalendarBackground
+	cr.Rect.Refresh()
 }
 
 // Rebuild the calendar
