@@ -14,18 +14,18 @@ import (
 )
 
 type Day struct {
-	DayOfWeek string
-	Month int
-	Day int
-	Year int
-	PoopStrings []string
-	FoodItems []FoodItem
-	NoteStrings []string
+	DayOfWeek     string
+	Month         int
+	Day           int
+	Year          int
+	PoopStrings   []string
+	FoodItems     []FoodItem
+	NoteStrings   []string
 	WeightStrings []string
 }
 
 type FoodItem struct {
-	Name string
+	Name     string
 	Quantity int
 	Calories int
 }
@@ -40,13 +40,13 @@ func At[T any](slice []T, idx int) T {
 
 func NewDay(dayOfWeek string, month int, day int, year int) *Day {
 	return &Day{
-		DayOfWeek: dayOfWeek,
-		Month: month,
-		Day: day,
-		Year: year,
-		PoopStrings: make([]string, 0), 
-		FoodItems: make([]FoodItem, 0),
-		NoteStrings: make([]string, 0),
+		DayOfWeek:     dayOfWeek,
+		Month:         month,
+		Day:           day,
+		Year:          year,
+		PoopStrings:   make([]string, 0),
+		FoodItems:     make([]FoodItem, 0),
+		NoteStrings:   make([]string, 0),
 		WeightStrings: make([]string, 0),
 	}
 }
@@ -75,7 +75,7 @@ func (day *Day) String() string {
 			foodLine += foodItemStrs[i]
 		} else {
 			// Cap at 110 columns
-			if len(foodLine) + len(foodItemStrs[i]) + 2 >= 110 {
+			if len(foodLine)+len(foodItemStrs[i])+2 >= 110 {
 				foodLines = append(foodLines, foodLine)
 				foodLine = "- Ate: "
 				i--
@@ -92,7 +92,7 @@ func (day *Day) String() string {
 	// Add total calories
 	cals := day.Calories()
 	totalCalsLine := "- Total calories: " + strconv.Itoa(cals) + "-" + strconv.Itoa(cals+200)
-		
+
 	// Put everything together
 	lines := make([]string, 0)
 	lines = append(lines, date)
@@ -101,7 +101,7 @@ func (day *Day) String() string {
 	lines = append(lines, totalCalsLine)
 	lines = append(lines, day.NoteStrings...)
 	lines = append(lines, day.WeightStrings...)
-	
+
 	return strings.Join(lines, "\n")
 }
 
@@ -126,6 +126,46 @@ func (day *Day) WeightsAsStrings() []string {
 		}
 	}
 	return weights
+}
+
+// Day matches a search term
+func (day *Day) Search(
+	needle string, 
+	searchPoop bool, 
+	searchFood bool, 
+	searchNotes bool, 
+	searchWeights bool) bool {
+
+	needle = strings.ToLower(needle)
+	if searchPoop {
+		for _, poop := range day.PoopStrings {
+			if strings.Contains(strings.ToLower(poop), needle) {
+				return true
+			}
+		}
+	}
+	if searchFood {
+		for _, food := range day.FoodItems {
+			if strings.Contains(strings.ToLower(food.Name), needle) {
+				return true
+			}
+		}
+	}
+	if searchNotes {
+		for _, note := range day.NoteStrings {
+			if strings.Contains(strings.ToLower(note), needle) {
+				return true
+			}
+		}
+	}
+	if searchWeights {
+		for _, weight := range day.WeightStrings {
+			if strings.Contains(strings.ToLower(weight), needle) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func GetYears(days []*Day, y2kCompliant bool) []int {
@@ -185,10 +225,10 @@ func ReadDiaryFile(filename string) ([]*Day, error) {
 			if strings.HasPrefix(line, "Pooped") {
 				line = "- " + line
 				day.PoopStrings = append(day.PoopStrings, line)
-			// Skip total calories
+				// Skip total calories
 			} else if strings.HasPrefix(line, "Total calories: ") {
 				continue
-			// Food list
+				// Food list
 			} else if strings.HasPrefix(line, "Ate: ") {
 				line := line[5:]
 				for _, foodStr := range strings.Split(line, ", ") {
@@ -199,7 +239,7 @@ func ReadDiaryFile(filename string) ([]*Day, error) {
 						quant, _ := strconv.Atoi(m1[1])
 						cals, _ := strconv.Atoi(m1[3])
 						item := FoodItem{
-							Name: m1[2],
+							Name:     m1[2],
 							Quantity: quant,
 							Calories: cals,
 						}
@@ -207,7 +247,7 @@ func ReadDiaryFile(filename string) ([]*Day, error) {
 					} else if m2 != nil {
 						cals, _ := strconv.Atoi(m2[2])
 						item := FoodItem{
-							Name: m2[1],
+							Name:     m2[1],
 							Quantity: 0,
 							Calories: cals,
 						}
@@ -216,11 +256,11 @@ func ReadDiaryFile(filename string) ([]*Day, error) {
 
 					}
 				}
-			// Weight strings (can be more than one)
+				// Weight strings (can be more than one)
 			} else if strings.HasPrefix(line, "Weight: ") {
 				line = "- " + line
 				day.WeightStrings = append(day.WeightStrings, line)
-			// Random note (workout, work, etc.)
+				// Random note (workout, work, etc.)
 			} else {
 				line = "- " + line
 				day.NoteStrings = append(day.NoteStrings, line)
@@ -237,7 +277,7 @@ func DiarySliceToMap(days []*Day) map[[3]int]*Day {
 		key := [3]int{day.Month, day.Day, day.Year}
 		mp[key] = day
 	}
-	return mp 
+	return mp
 }
 
 /*func main() {

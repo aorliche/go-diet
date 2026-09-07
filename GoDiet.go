@@ -50,7 +50,7 @@ var monthStrs = []string{
 	"November",
 	"December",
 }
-	
+
 var colorWeekdayBackground = color.Gray{Y: 60}
 var colorWeekday = color.White
 var colorCalendarBackground = color.Gray{Y: 30}
@@ -60,9 +60,15 @@ var colorCalendarGridStrokeCurrentMonth = color.Gray{Y: 150}
 var colorDayNotCurrentMonth = color.Gray{Y: 150}
 var colorDayCurrentMonth = color.White
 var colorCaloriesNotCurrentMonth = color.Gray{Y: 150} //color.NRGBA{R: 255, G: 255, B: 0, A: 150}
-var colorCaloriesCurrentMonth = color.White //color.NRGBA{R: 255, G: 255, B: 0, A: 255}
-var colorWeightsNotCurrentMonth = color.Gray{Y: 150} //color.NRGBA{R: 255, G: 100, B: 0, A: 150}
-var colorWeightsCurrentMonth = color.White //color.NRGBA{R: 255, G: 100, B: 0, A: 255}
+var colorCaloriesCurrentMonth = color.White           //color.NRGBA{R: 255, G: 255, B: 0, A: 255}
+var colorWeightsNotCurrentMonth = color.Gray{Y: 150}  //color.NRGBA{R: 255, G: 100, B: 0, A: 150}
+var colorWeightsCurrentMonth = color.White            //color.NRGBA{R: 255, G: 100, B: 0, A: 255}
+
+var searchPoop = true
+var searchFood = true
+var searchNotes = true
+var searchWeights = true
+var searchTerm = ""
 
 func daysInMonth(year int, month time.Month) int {
 	return time.Date(year, month, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 1, -1).Day()
@@ -72,14 +78,16 @@ func daysInMonth(year int, month time.Month) int {
 // Can be clicked to inspect the raw entry for the day
 type ClickableRectangle struct {
 	widget.BaseWidget
-	Rect *canvas.Rectangle
+	Rect  *canvas.Rectangle
 	OnTap func()
+	PrevColor color.Color
 }
 
 func NewClickableRectangle(color color.Color, onTap func()) *ClickableRectangle {
-	cr := &ClickableRectangle {
-		Rect: canvas.NewRectangle(color),
+	cr := &ClickableRectangle{
+		Rect:  canvas.NewRectangle(color),
 		OnTap: onTap,
+		PrevColor: nil,
 	}
 	cr.ExtendBaseWidget(cr)
 	return cr
@@ -97,6 +105,7 @@ func (cr *ClickableRectangle) Tapped(ev *fyne.PointEvent) {
 
 // For mouseover events
 func (cr *ClickableRectangle) MouseIn(e *desktop.MouseEvent) {
+	cr.PrevColor = cr.Rect.FillColor
 	cr.Rect.FillColor = colorWeekdayBackground
 	cr.Rect.Refresh()
 }
@@ -106,21 +115,23 @@ func (cr *ClickableRectangle) MouseMoved(e *desktop.MouseEvent) {
 }
 
 func (cr *ClickableRectangle) MouseOut() {
-	cr.Rect.FillColor = colorCalendarBackground
-	cr.Rect.Refresh()
+	if cr.PrevColor != nil {
+		cr.Rect.FillColor = cr.PrevColor 
+		cr.Rect.Refresh()
+	}
 }
 
 // Rebuild the calendar
 func createCalendarArea(
-	curMonth int, 
-	curYear int, 
-	diaryMap map[[3]int]*Day, 
+	curMonth int,
+	curYear int,
+	diaryMap map[[3]int]*Day,
 	app fyne.App) (fyne.CanvasObject, error) {
 
 	days := make([]fyne.CanvasObject, 7)
 
 	for i := 0; i < 7; i++ {
-		rect := canvas.NewRectangle(colorWeekdayBackground)
+		rect := canvas.NewRectangle(colorCalendarBackground)
 		rect.SetMinSize(fyne.NewSize(daySideLength, dayOfWeekHeight))
 		rect.StrokeColor = colorCalendarGridStrokeCurrentMonth
 		rect.StrokeWidth = 2
@@ -134,16 +145,16 @@ func createCalendarArea(
 
 	daysRow := container.New(layout.NewGridLayout(7), days...)
 
-	prevMonth := curMonth-1
+	prevMonth := curMonth - 1
 	prevYear := curYear
 	if prevMonth == 0 {
 		prevMonth = 12
-		prevYear = curYear-1
-	} 
+		prevYear = curYear - 1
+	}
 
-	firstDay := int(time.Date(2000 + curYear, time.Month(curMonth), 1, 0, 0, 0, 0, time.UTC).Weekday())
-	prevMonthDays := daysInMonth(2000 + prevYear, time.Month(prevMonth))
-	daysLimit := daysInMonth(2000 + curYear, time.Month(curMonth))
+	firstDay := int(time.Date(2000+curYear, time.Month(curMonth), 1, 0, 0, 0, 0, time.UTC).Weekday())
+	prevMonthDays := daysInMonth(2000+prevYear, time.Month(prevMonth))
+	daysLimit := daysInMonth(2000+curYear, time.Month(curMonth))
 	count := 0
 
 	calendar := make([]fyne.CanvasObject, 6*7)
@@ -199,12 +210,21 @@ func createCalendarArea(
 				boxStrokeColor = colorCalendarGridStrokeCurrentMonth
 				count++
 			}
+			
+			diaryDay, ok := diaryMap[[3]int{month, day, year}]
 
-			box := NewClickableRectangle(colorCalendarBackground, func() {
+			var boxColor = colorCalendarBackground
+			if ok && searchTerm != "" {
+				if diaryDay.Search(searchTerm, searchPoop, searchFood, searchNotes, searchWeights) {
+					boxColor = colorWeekdayBackground
+				}
+			}
+
+			box := NewClickableRectangle(boxColor, func() {
 				dayObj, ok := diaryMap[[3]int{month, day, year}]
 				if ok {
 					text := dayObj.String()
-					entry :=  widget.NewMultiLineEntry()
+					entry := widget.NewMultiLineEntry()
 					entry.SetText(text)
 
 					date := "Unknown Date"
@@ -212,7 +232,7 @@ func createCalendarArea(
 					if scanner.Scan() {
 						date = scanner.Text()
 					}
-					
+
 					entryWindow := app.NewWindow(date)
 					entryWindow.SetContent(entry)
 					entryWindow.Resize(fyne.NewSize(800, 300))
@@ -220,7 +240,7 @@ func createCalendarArea(
 				}
 			})
 			box.Rect.SetMinSize(fyne.NewSize(daySideLength, daySideLength))
-			box.Rect.StrokeColor = boxStrokeColor 
+			box.Rect.StrokeColor = boxStrokeColor
 			box.Rect.StrokeWidth = 2
 			box.Rect.CornerRadius = 8
 
@@ -232,10 +252,10 @@ func createCalendarArea(
 			elts := make([]fyne.CanvasObject, 2)
 			elts[0] = box
 			elts[1] = paddedText
-			diaryDay, ok := diaryMap[[3]int{month, day, year}]
+
 			if ok {
 				calories := canvas.NewText(
-					"Calories: " + strconv.Itoa(diaryDay.Calories()), 
+					"Calories: "+strconv.Itoa(diaryDay.Calories()),
 					caloriesColor,
 				)
 				caloriesPadded := container.New(
@@ -247,7 +267,7 @@ func createCalendarArea(
 				weights := diaryDay.WeightsAsStrings()
 				for i, weight := range weights {
 					weightsText := canvas.NewText(
-						weight + " lbs.",
+						weight+" lbs.",
 						weightsColor,
 					)
 					topPad := 10
@@ -268,12 +288,12 @@ func createCalendarArea(
 					elts = append(elts, weightsPadded)
 
 				}
-			} 
+			}
 
 			calendar[i*7+j] = container.NewStack(elts...)
 		}
 	}
-	
+
 	grid := container.New(layout.NewGridLayout(7), calendar...)
 	content := container.NewVBox(daysRow, grid)
 
@@ -301,7 +321,7 @@ func main() {
 	years := GetYears(diarySlice, true)
 	yearStrs := make([]string, len(years))
 
-	for i,year := range years {
+	for i, year := range years {
 		yearStrs[i] = strconv.Itoa(year)
 	}
 
@@ -310,9 +330,9 @@ func main() {
 
 	labelMonth := widget.NewLabel("Month:")
 	comboMonth := widget.NewSelect(monthStrs, func(value string) {
-		for i,month := range monthStrs {
+		for i, month := range monthStrs {
 			if month == value {
-				curMonth = i+1
+				curMonth = i + 1
 				calendar, _ := createCalendarArea(curMonth, curYear, diaryMap, dietApp)
 				calendarContainer.Objects[0] = calendar
 				calendarContainer.Refresh()
@@ -320,11 +340,11 @@ func main() {
 			}
 		}
 	})
-	comboMonth.SetSelectedIndex(curMonth-1)
-	
+	comboMonth.SetSelectedIndex(curMonth - 1)
+
 	labelYear := widget.NewLabel("Year:")
 	comboYear := widget.NewSelect(yearStrs, func(value string) {
-		for _,year := range yearStrs {
+		for _, year := range yearStrs {
 			if year == value {
 				curYear, _ := strconv.Atoi(year)
 				curYear -= 2000
@@ -335,7 +355,7 @@ func main() {
 			}
 		}
 	})
-	comboYear.SetSelectedIndex(len(yearStrs)-1)
+	comboYear.SetSelectedIndex(len(yearStrs) - 1)
 
 	back := widget.NewButtonWithIcon("Back", theme.Icon(theme.IconNameNavigateBack), func() {
 		if curMonth == 1 {
@@ -346,21 +366,21 @@ func main() {
 		}
 
 		// Stop it getting confused
-		yearStr := strconv.Itoa(2000+curYear)
+		yearStr := strconv.Itoa(2000 + curYear)
 		if !slices.Contains(yearStrs, yearStr) {
 			curMonth = 1
 			curYear += 1
 			return
 		}
 
-		comboMonth.SetSelectedIndex(curMonth-1)
+		comboMonth.SetSelectedIndex(curMonth - 1)
 		comboYear.SetSelected(yearStr)
 
 		calendar, _ := createCalendarArea(curMonth, curYear, diaryMap, dietApp)
 		calendarContainer.Objects[0] = calendar
 		calendarContainer.Refresh()
 	})
-	
+
 	next := widget.NewButtonWithIcon("Next", theme.Icon(theme.IconNameNavigateNext), func() {
 		if curMonth == 12 {
 			curMonth = 1
@@ -370,14 +390,14 @@ func main() {
 		}
 
 		// Stop it getting confused
-		yearStr := strconv.Itoa(2000+curYear)
+		yearStr := strconv.Itoa(2000 + curYear)
 		if !slices.Contains(yearStrs, yearStr) {
 			curMonth = 12
 			curYear -= 1
 			return
 		}
 
-		comboMonth.SetSelectedIndex(curMonth-1)
+		comboMonth.SetSelectedIndex(curMonth - 1)
 		comboYear.SetSelected(yearStr)
 
 		calendar, _ := createCalendarArea(curMonth, curYear, diaryMap, dietApp)
@@ -385,16 +405,69 @@ func main() {
 		calendarContainer.Refresh()
 	})
 
+	// Search
+	entryLabel := widget.NewLabel("Search:")
+	entry := widget.NewEntry()
+	entry.SetPlaceHolder("Enter phrase...")
+	entry.OnChanged = func(value string) {
+		searchTerm = strings.TrimSpace(value)
+		calendar, _ := createCalendarArea(curMonth, curYear, diaryMap, dietApp)
+		calendarContainer.Objects[0] = calendar
+		calendarContainer.Refresh()
+	}
+	wrappedEntry := container.NewGridWrap(fyne.NewSize(350, 36), entry)
+
+	checkPoop := widget.NewCheck("Poop", func (checked bool) {
+		searchPoop = checked
+		calendar, _ := createCalendarArea(curMonth, curYear, diaryMap, dietApp)
+		calendarContainer.Objects[0] = calendar
+		calendarContainer.Refresh()
+	})
+	checkPoop.Checked = true
+	checkFood := widget.NewCheck("Food Items", func (checked bool) {
+		searchFood = checked
+		calendar, _ := createCalendarArea(curMonth, curYear, diaryMap, dietApp)
+		calendarContainer.Objects[0] = calendar
+		calendarContainer.Refresh()
+	})
+	checkFood.Checked = true
+	checkNotes := widget.NewCheck("Notes", func (checked bool) {
+		searchNotes = checked
+		calendar, _ := createCalendarArea(curMonth, curYear, diaryMap, dietApp)
+		calendarContainer.Objects[0] = calendar
+		calendarContainer.Refresh()
+	})
+	checkNotes.Checked = true
+	checkWeights := widget.NewCheck("Weight Strings", func (checked bool) {
+		searchWeights = checked
+		calendar, _ := createCalendarArea(curMonth, curYear, diaryMap, dietApp)
+		calendarContainer.Objects[0] = calendar
+		calendarContainer.Refresh()
+	})
+	checkWeights.Checked = true
+
 	pigIcon := fyne.NewStaticResource("image/pig.png", logoBytes)
 	calendarWindow.SetIcon(pigIcon)
 
-	ui := container.New(
+	ui1 := container.New(
 		layout.NewHBoxLayout(),
 		layout.NewSpacer(),
 		back, labelMonth, comboMonth, labelYear, comboYear, next,
 		layout.NewSpacer(),
 	)
-	content := container.NewVBox(ui, calendarContainer)
+	ui2 := container.New(
+		layout.NewHBoxLayout(),
+		layout.NewSpacer(),
+		entryLabel, wrappedEntry,
+		layout.NewSpacer(),
+	)
+	ui3 := container.New(
+		layout.NewHBoxLayout(),
+		layout.NewSpacer(),
+		checkPoop, checkFood, checkNotes, checkWeights,
+		layout.NewSpacer(),
+	)
+	content := container.NewVBox(ui1, ui2, ui3, calendarContainer)
 
 	calendarWindow.SetContent(content)
 	calendarWindow.ShowAndRun()
