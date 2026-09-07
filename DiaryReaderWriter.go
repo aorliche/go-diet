@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -125,6 +126,21 @@ func (day *Day) WeightsAsStrings() []string {
 		}
 	}
 	return weights
+}
+
+func GetYears(days []*Day, y2kCompliant bool) []int {
+	years := make([]int, 0)
+	for _, day := range days {
+		year := day.Year
+		if y2kCompliant {
+			year += 2000
+		}
+		if slices.Contains(years, year) {
+			continue
+		}
+		years = append(years, year)
+	}
+	return years
 }
 
 // Parse a diary file formatted in my ad-hoc format
